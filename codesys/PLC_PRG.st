@@ -7,13 +7,13 @@ VAR
 	xParo_HMI				: BOOL := FALSE;
 	xModoAutomatico			: BOOL := TRUE;
 
-	(* Entradas físicas desde ESP32 por Modbus TCP *)
+	(* Entradas físicas previstas desde ESP32 / Modbus TCP *)
 	xStart_GPIO36			: BOOL := FALSE;
 	xParoNC_GPIO39			: BOOL := TRUE;		(* Contacto NC sano en reposo = TRUE *)
-	rTensionFiltrada		: REAL := 10.0;		(* HX711 DT:32 / SCK:33 en R2 *)
+	rTensionFiltrada		: REAL := 10.0;		(* Celda HX711 DT:32 / SCK:33 en rodillo 2 *)
 	rVelocidadLinea			: REAL := 30.0;		(* Encoder LPD3806 A:34 / B:35 *)
 	rPosicionRegla			: REAL := 0.0;
-	iTeclado_GPIO16			: INT := 0;			(* Consigna recibida por UART desde Arduino UNO *)
+	iTeclado_GPIO16			: INT := 0;			(* Consigna UART desde Arduino UNO *)
 
 	(* Permisos de operación y finales de carrera *)
 	xCeldaCargaOK			: BOOL := TRUE;
@@ -26,15 +26,15 @@ VAR
 	xMovimientoPermitido	: BOOL := TRUE;
 	xMovimientoDetenido		: BOOL := TRUE;
 
-	(* Parámetros de ciclo y control PID *)
+	(* Parámetros de ciclo y lazo supervisor PID ilustrativo *)
 	wCantidadPliegues		: WORD := 5;
 	rSetpointTension		: REAL := 10.0;
 	rTensionMaxima			: REAL := 50.0;
 	rVelPerfil				: REAL := 30.0;
 	rVelocidadPID			: REAL := 30.0;
-	rKp						: REAL := 1.0;
-	rKi						: REAL := 0.1;
-	rKd						: REAL := 0.05;
+	rKp						: REAL := 0.002;	(* Valores ilustrativos de polo s=-2; sin sintonizar en máquina *)
+	rKi						: REAL := 0.001333;
+	rKd						: REAL := 0.0001667;
 
 	(* Máquina de estados, telemetría y alarmas *)
 	iEstadoProceso			: INT := 0;
@@ -69,7 +69,7 @@ VAR
 	xAlarmaActiva			: BOOL;
 	xFalloSecuencia			: BOOL;
 
-	(* Salidas hacia actuadores en ESP32 *)
+	(* Salidas previstas hacia actuadores en ESP32 *)
 	xNEMA_Enable_GPIO27		: BOOL;
 	xNEMA_Dir_GPIO26		: BOOL;
 	xTT1_IN1_GPIO14			: BOOL;

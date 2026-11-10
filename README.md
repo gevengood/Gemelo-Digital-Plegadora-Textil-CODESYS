@@ -1,8 +1,11 @@
-﻿# Gemelo Digital y Control Automático — Plegadora Textil (Insuclínicos)
+﻿# Prototipo de Tendido y Plegado Automático de Tela — Insuclínicos
 
 Repositorio oficial del proyecto de **Automatización y Control de Procesos (2026-2)** — Universidad de La Sabana.
 
-📖 **Documentación completa del proyecto:** 👉 **[Ir a la Wiki del Proyecto](https://github.com/gevengood/Gemelo-Digital-Plegadora-Textil-CODESYS/wiki)**
+* 📖 **Wiki técnica completa:** 👉 **[Ir a la Wiki del Proyecto](https://github.com/gevengood/Gemelo-Digital-Plegadora-Textil-CODESYS/wiki)**
+* 📊 **Presentación Pitch (Google Slides):** 👉 **[Abrir Presentación](https://docs.google.com/presentation/d/11WZ_Zf2Y2pb5ZqilpSzZr3aeZtRkJzwEJxSZrB2HEPU/edit?usp=sharing)**
+
+> **Estado real:** Se desarrolló el diseño modular, el montaje físico preliminar (**304.000 COP**), el código Arduino UNO, `PLC_PRG` con **29 Rungs Ladder** y el lienzo HMI en CODESYS. **La implementación física integrada no funcionó durante pruebas y, por ello, no se completó la validación experimental ni el modelo digital en operación en vivo.**
 
 ## Estructura del Repositorio
 * [`arduino/teclado_lcd.ino`](arduino/teclado_lcd.ino) — Adquisición teclado matricial `4x4` + pantalla `LCD 16x2` hacia ESP32 (`UART 9600 bps`).

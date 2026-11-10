@@ -1,8 +1,8 @@
-# 2. Implementación en CODESYS V3.5 (`PLC_PRG` y 29 Rungs Ladder)
+# 2. Implementación en CODESYS V3.5 (`PLC_PRG`, Modelo y 29 Rungs Ladder)
 
-[⬅️ Volver al Inicio](Home)
+[⬅️ Volver al Inicio](Home) | [📊 Ver Presentación (Google Slides)](https://docs.google.com/presentation/d/11WZ_Zf2Y2pb5ZqilpSzZr3aeZtRkJzwEJxSZrB2HEPU/edit?usp=sharing)
 
-La lógica principal de control secuencial, seguridad, conteo de pliegues, supervisión de tensión y mando de actuadores se implementó bajo estándar **IEC 61131-3** en lenguaje **Ladder (LD)** dentro de la POU **`PLC_PRG`** (`CODESYS Control Win V3 x64`).
+> **⚠️ Alcance del módulo de software:** El código de `PLC_PRG` y las **29 redes Ladder (`0a`–`14d`)** representan la lógica modular propuesta bajo **IEC 61131-3** (dividida en adquisición de fuerza/movimiento, trayectoria/supervisión de velocidad `vc = min{vperfil, vlim}`, estados de avance/sujeción/retorno e interfaz). **Dado que la implementación física integrada no funcionó, estas rutinas no llegaron a operar en lazo cerrado sobre el hardware real ni completaron el enlace operativo del gemelo digital.**
 
 ---
 
@@ -18,13 +18,13 @@ VAR
 	xParo_HMI				: BOOL := FALSE;
 	xModoAutomatico			: BOOL := TRUE;
 
-	(* Entradas físicas desde ESP32 por Modbus TCP *)
+	(* Entradas físicas previstas desde ESP32 / Modbus TCP *)
 	xStart_GPIO36			: BOOL := FALSE;
 	xParoNC_GPIO39			: BOOL := TRUE;		(* Contacto NC sano en reposo = TRUE *)
-	rTensionFiltrada		: REAL := 10.0;		(* HX711 DT:32 / SCK:33 en R2 *)
+	rTensionFiltrada		: REAL := 10.0;		(* Celda HX711 DT:32 / SCK:33 en rodillo 2 *)
 	rVelocidadLinea			: REAL := 30.0;		(* Encoder LPD3806 A:34 / B:35 *)
 	rPosicionRegla			: REAL := 0.0;
-	iTeclado_GPIO16			: INT := 0;			(* Consigna recibida por UART desde Arduino UNO *)
+	iTeclado_GPIO16			: INT := 0;			(* Consigna UART desde Arduino UNO *)
 
 	(* Permisos de operación y finales de carrera *)
 	xCeldaCargaOK			: BOOL := TRUE;
@@ -37,15 +37,15 @@ VAR
 	xMovimientoPermitido	: BOOL := TRUE;
 	xMovimientoDetenido		: BOOL := TRUE;
 
-	(* Parámetros de ciclo y control PID *)
+	(* Parámetros de ciclo y lazo supervisor PID ilustrativo *)
 	wCantidadPliegues		: WORD := 5;
 	rSetpointTension		: REAL := 10.0;
 	rTensionMaxima			: REAL := 50.0;
 	rVelPerfil				: REAL := 30.0;
 	rVelocidadPID			: REAL := 30.0;
-	rKp						: REAL := 1.0;
-	rKi						: REAL := 0.1;
-	rKd						: REAL := 0.05;
+	rKp						: REAL := 0.002;	(* Valores ilustrativos de polo s=-2; sin sintonizar en máquina *)
+	rKi						: REAL := 0.001333;
+	rKd						: REAL := 0.0001667;
 
 	(* Máquina de estados, telemetría y alarmas *)
 	iEstadoProceso			: INT := 0;
@@ -80,7 +80,7 @@ VAR
 	xAlarmaActiva			: BOOL;
 	xFalloSecuencia			: BOOL;
 
-	(* Salidas hacia actuadores en ESP32 *)
+	(* Salidas previstas hacia actuadores en ESP32 *)
 	xNEMA_Enable_GPIO27		: BOOL;
 	xNEMA_Dir_GPIO26		: BOOL;
 	xTT1_IN1_GPIO14			: BOOL;
@@ -108,7 +108,7 @@ Combina en lógica `OR` el botón `INICIAR` del HMI (`xInicio_HMI`) y el pulsado
    +--[ ] xStart_GPIO36 ---+
 ```
 
-#### Rung `0b` — Parada de emergencia (HMI o hongo físico NC)
+#### Rung `0b` — Parada de emergencia (HMI o contacto físico NC)
 Activa `xParoEmergencia` si se pulsa `PARO EMERGENCIA` en el HMI (`xParo_HMI`) o si se abre el contacto normalmente cerrado en `GPIO 39` (`NOT xParoNC_GPIO39`, lógica falla-segura).
 ```text
 |--+--[ ] xParo_HMI -------+--( ) xParoEmergencia--|
@@ -160,17 +160,17 @@ Verifica que la regla esté en origen y la tela sujeta con permiso activo para a
 
 ---
 
-### Grupo 4–6: Avance de Regla, Lazo de Velocidad y Liberación de Tela
+### Grupo 4–6: Avance de Regla, Lazo Supervisor (`MIN`) y Liberación
 
-#### Rung `4a` — Estado 20: Comando de avance y habilitación PID
-Ordena el avance de la regla (`xReglaAvanzando`) y habilita el lazo de control de tensión/velocidad (`xPIDHabilitado`) mientras no exista pausa ni bloqueo mecánico.
+#### Rung `4a` — Estado 20: Comando de avance y habilitación del supervisor
+Ordena el avance de la regla (`xReglaAvanzando`) y habilita el lazo de control (`xPIDHabilitado`) mientras no exista pausa ni bloqueo mecánico.
 ```text
 |--[ ] xEstado20_Avance --[ ] xSistemaListo --[/] xPausa --[ ] xMovimientoPermitido --+--( ) xReglaAvanzando--|
                                                                                       +--( ) xPIDHabilitado---|
 ```
 
-#### Rung `4b` — Selección segura de consigna de velocidad (`MIN`)
-Limita la velocidad comandada (`rVelComandada`) al menor valor entre el perfil nominal (`rVelPerfil`) y la salida del PID (`rVelocidadPID`).
+#### Rung `4b` — Selección supervisora de velocidad (`MIN`: $v_c = \min\{v_{\text{perfil}}, v_{\lim}\}$)
+Implementa directamente la estrategia de supervisión de tensión sin alterar la longitud objetivo: toma el mínimo entre el perfil de desplazamiento (`rVelPerfil`) y el límite calculado por tensión (`rVelocidadPID`).
 ```text
 |                       +---------------+
 |--[ ] xPIDHabilitado --|EN  MIN     ENO|--
@@ -186,7 +186,7 @@ Al llegar la regla al destino (`xReglaEnDestino`) con movimiento detenido, trans
                                                                           +--(R) xEstado20_Avance---|
 ```
 
-#### Rung `6a` — Estado 30: Orden de liberación de pinzas
+#### Rung `6a` — Estado 30: Orden de liberación de sujeción
 Activa el comando `xCmdLiberar` para soltar la tela al finalizar el tendido del pliegue.
 ```text
 |--[ ] xEstado30_Liberar --[ ] xSistemaListo --( ) xCmdLiberar--|
@@ -301,7 +301,7 @@ Restablece `iEstadoProceso := 0` durante el reset seguro del sistema.
 ```
 
 #### Rung `13a` — Comparación de umbral de sobretensión (`GE`)
-Evalúa en tiempo real si la tensión medida por la celda de carga (`rTensionFiltrada`) supera o iguala `rTensionMaxima`.
+Evalúa si la fuerza filtrada (`rTensionFiltrada`) supera o iguala `rTensionMaxima`.
 ```text
 |  +-----------------+
 |--|       GE        |--( ) xUmbralTension--|
@@ -320,7 +320,7 @@ Retiene la alarma (`xTensionAlta`, `xAlarmaActiva`, `xFalloSecuencia`) hasta que
 
 ---
 
-### Grupo 14: Salidas Físicas hacia Actuadores (`ESP32`)
+### Grupo 14: Salidas Físicas Previstas hacia Actuadores (`ESP32`)
 
 #### Rung `14a` — Habilitación del driver `NEMA 17` (`GPIO 27`)
 Habilita el driver del motor paso a paso tanto en avance como en retorno de la regla.
@@ -336,7 +336,7 @@ Fija la dirección física del eje lineal (`TRUE` al avanzar, `FALSE` al retorna
 ```
 
 #### Rung `14c` — Puente H `HW-094`: Giro de sujeción (`GPIO 14` y `17`)
-Activa las entradas `IN1` e `IN3` de ambos motores de sujeción con enclavamiento excluyente (`NOT xCmdLiberar`) para evitar cortocircuitos en el puente H.
+Activa las entradas `IN1` e `IN3` de ambos actuadores de sujeción con enclavamiento excluyente (`NOT xCmdLiberar`).
 ```text
 |--[ ] xCmdSujetar --[/] xCmdLiberar --+--( ) xTT1_IN1_GPIO14--|
                                        +--( ) xTT2_IN3_GPIO17--|
